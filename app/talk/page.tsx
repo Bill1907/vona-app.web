@@ -70,6 +70,7 @@ function TalkPageComponent() {
   // 상태 관리
   const [items, setItems] = useState<ExtendedItemType[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  //
   const [realtimeEvents, setRealtimeEvents] = useState<RealtimeEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -227,6 +228,10 @@ function TalkPageComponent() {
       client.reset();
     };
   }, []);
+
+  useEffect(() => {
+    console.log("realtimeEvents", realtimeEvents);
+  }, [realtimeEvents]);
 
   return (
     <div className="flex flex-col min-h-screen p-4 space-y-4 items-center justify-center">
