@@ -1,8 +1,8 @@
 export class WavRecorder {
   static decode(
-    audioData: Blob | Float32Array | Int16Array | ArrayBuffer | number[],
-    sampleRate?: number,
-    fromSampleRate?: number
+    _audioData: Blob | Float32Array | Int16Array | ArrayBuffer | number[],
+    _sampleRate?: number,
+    _fromSampleRate?: number
   ) {
     throw new Error("Method not implemented.");
   }
