@@ -8,6 +8,20 @@ import { Card } from "@/components/ui/card";
 import dynamic from "next/dynamic";
 import { Mic, MicOff, Loader2 } from "lucide-react";
 
+type ExtendedItemType = ItemType & {
+  status?: string;
+  formatted: {
+    audio?: ArrayBuffer;
+    file?: {
+      url: string;
+    };
+    transcript?: string;
+    text?: string;
+  };
+  role: "user" | "assistant";
+  id: string;
+};
+
 // 클라이언트 사이드에서만 렌더링되도록 설정
 const TalkPageContent = dynamic(() => Promise.resolve(TalkPageComponent), {
   ssr: false,
@@ -17,7 +31,24 @@ interface RealtimeEvent {
   time: string;
   source: "client" | "server";
   count?: number;
-  event: { [key: string]: any };
+  event: {
+    type: string;
+    [key: string]: unknown;
+  };
+}
+
+interface ErrorEvent {
+  message: string;
+  code?: string;
+  details?: unknown;
+}
+
+interface ConversationUpdateEvent {
+  item: ExtendedItemType;
+  delta: {
+    audio?: ArrayBuffer;
+    [key: string]: unknown;
+  };
 }
 
 function TalkPageComponent() {
@@ -37,7 +68,7 @@ function TalkPageComponent() {
   );
 
   // 상태 관리
-  const [items, setItems] = useState<ItemType[]>([]);
+  const [items, setItems] = useState<ExtendedItemType[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [realtimeEvents, setRealtimeEvents] = useState<RealtimeEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -57,19 +88,19 @@ function TalkPageComponent() {
 
       setIsConnected(true);
       setRealtimeEvents([]);
-      setItems(client.conversation.getItems());
+      setItems(client.conversation.getItems() as ExtendedItemType[]);
 
       try {
         await wavRecorder.begin();
-      } catch (err: any) {
-        if (err.name === "NotAllowedError") {
+      } catch (error) {
+        if (error instanceof Error && error.name === "NotAllowedError") {
           setError(
             "마이크 접근이 거부되었습니다. 브라우저 설정에서 마이크 권한을 허용해주세요."
           );
           setIsConnected(false);
           return;
         }
-        throw err;
+        throw error;
       }
 
       await wavStreamPlayer.connect();
@@ -156,7 +187,7 @@ function TalkPageComponent() {
       });
     });
 
-    client.on("error", (event: any) => {
+    client.on("error", (event: ErrorEvent) => {
       console.error(event);
       setError("오류가 발생했습니다.");
       setIsProcessing(false);
@@ -171,19 +202,26 @@ function TalkPageComponent() {
       }
     });
 
-    client.on("conversation.updated", async ({ item, delta }: any) => {
-      const items = client.conversation.getItems();
-      if (delta?.audio) {
-        wavStreamPlayer.add16BitPCM(delta.audio, item.id);
+    client.on(
+      "conversation.updated",
+      ({ item, delta }: ConversationUpdateEvent) => {
+        const items = client.conversation.getItems() as ExtendedItemType[];
+        if (delta?.audio) {
+          wavStreamPlayer.add16BitPCM(delta.audio, item.id);
+        }
+        if (item.status === "completed" && item.formatted.audio) {
+          const wavFile = WavRecorder.decode(
+            item.formatted.audio,
+            24000,
+            24000
+          );
+          item.formatted.file = wavFile;
+        }
+        setItems(items);
       }
-      if (item.status === "completed" && item.formatted.audio?.length) {
-        const wavFile = WavRecorder.decode(item.formatted.audio, 24000, 24000);
-        item.formatted.file = wavFile;
-      }
-      setItems(items);
-    });
+    );
 
-    setItems(client.conversation.getItems());
+    setItems(client.conversation.getItems() as ExtendedItemType[]);
 
     return () => {
       client.reset();
